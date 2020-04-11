@@ -1,0 +1,21 @@
+
+from django.urls import path
+from . import views, browserImage
+
+
+urlpatterns = [
+    path('gettreedata/', views.gettreedata, name='gettreedata'),
+    path('getlistdata/', views.getlistdata, name='getlistdata'),
+    path('GetData_Usage_Policy/', views.GetData_Usage_Policy, name='GetData_Usage_Policy'),
+    path('SetData_Usage_Policy/', views.SetData_Usage_Policy, name='SetData_Usage_Policy'),
+    path('GetData_News/', views.GetData_News, name='GetData_News'),
+    path('GetDataAbout/', views.GetDataAbout, name='GetDataAbout'),
+    path('SetDataAbout/', views.SetDataAbout, name='SetDataAbout'),
+    path('SetData_News/', views.SetData_News, name='SetData_News'),
+    path('GetAboutUs/', views.GetAboutUs, name='GetAboutUs'),
+    path('SetAboutUs/', views.SetAboutUs, name='SetAboutUs'),
+    path('GetHelp/', views.GetHelp, name='GetHelp'),
+    path('SetHelpPage/', views.SetHelpPage, name='SetHelpPage'),
+    path('SetHelpQuesAns/', views.SetHelpQuesAns, name='SetHelpQuesAns'),
+    path('chromosomePageUI/', browserImage.chromosomePageUI, name='chromosomePageUI'),
+]
