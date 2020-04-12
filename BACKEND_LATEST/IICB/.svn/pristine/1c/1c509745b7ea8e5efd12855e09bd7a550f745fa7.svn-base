@@ -1,0 +1,599 @@
+from django.http import JsonResponse
+from django.core import serializers
+import os
+import array
+import json
+from . import DBUtils
+from . import Defaults
+from . import browserDrawing
+
+#new helper functions defined
+
+def _createclean2Darry(results):
+    '''
+    undef @ features;
+    while (my @ arry = $sth->fetchrow_array())
+        my @ temp;
+
+        foreach my $line( @ arry)
+            if (defined  $line)
+                push @ temp, $line;
+            else
+                push @ temp, -1;  # set to -1 when any element is missing
+        push @ features, [ @ temp];
+    '''
+    features = []
+    for arry in results:
+        temp = []
+        for line in arry:
+            if line is not None:
+                temp.append(line)
+            else:
+                temp.append(-1)
+        # end of for line in arry:
+        features.append(temp)
+    # end for arry in results:
+    return features
+
+#end new helper functions defined
+
+def getACname():
+    #NOT CALLED
+    return None
+
+def _getLen(organism, scaffold, version):
+    retlen = 0
+    #my $sql = "select * from externalnasequence where taxon_ID=$organism and source_ID='$scaffold' and sequence_type_ID=1 and sequence_version='$version'";
+    sql = "select * from externalnasequence where taxon_ID="\
+          +str(organism) + " and source_ID='" + str(scaffold) + "' and sequence_type_ID=1 "\
+          "and sequence_version='" + str(version) + "'";
+
+    db = DBUtils.MariaConnection('DOTS')
+    results = DBUtils.MariaGetData(db, sql)
+    DBUtils.MariaClose(db)
+    #print(results)
+
+    #while (my @ arry = $sth->fetchrow_array())
+    #   $len =$arry[9];
+    if len(results) > 0:
+        retlen = results[0][9]
+
+    return retlen;
+
+def getcommonfeature():
+    #NOT CALLED
+    return None
+
+def _getfeatures(organism, scaffold, version, startbase, stopbase):
+    jsonret = {'status':-1}
+    db = DBUtils.MariaConnection('DOTS')
+    '''
+    my $qryExonPlot="SELECT nl.na_location_id, nl.start_min, nl.end_min, nl.is_reversed, nl.loc_order, tran.na_feature_id, en.length, tran.string4, en.na_sequence_id, nl.is_excluded,tran.review_status_ID
+    FROM externalnasequence en, nalocation nl, nafeatureimp tran
+    WHERE en.taxon_id =$organism
+    AND en.sequence_version =$version
+    and en.source_ID='$scaffold'
+    AND en.na_sequence_id = tran.na_sequence_id
+    AND nl.na_feature_id = tran.na_feature_id
+    and ((nl.start_min between $startbase and $stopbase) or (nl.end_min between $startbase and $stopbase) or ($stopbase between nl.start_min and nl.end_min))
+    AND tran.name =  'gene'
+    ORDER BY nl.start_min";
+    '''
+    qryExonPlot = "SELECT nl.na_location_id, nl.start_min, nl.end_min, nl.is_reversed, nl.loc_order, tran.na_feature_id, en.length, tran.string4, en.na_sequence_id, nl.is_excluded,tran.review_status_ID FROM externalnasequence en, nalocation nl, nafeatureimp tran " \
+        + " WHERE en.taxon_id = " + str(organism) \
+        + " AND en.sequence_version =" + str(version) \
+        + " and en.source_ID='" + str(scaffold) + "'"\
+        + " AND en.na_sequence_id = tran.na_sequence_id AND nl.na_feature_id = tran.na_feature_id " \
+        + " and ((nl.start_min between " + str(startbase) + " and " + str (stopbase) + ")" \
+        + " or (nl.end_min between " + str(startbase) + " and " + str(stopbase) +")" \
+        + " or (" + str(stopbase) + " between nl.start_min and nl.end_min))" \
+        + " AND tran.name =  'gene'" \
+        + " ORDER BY nl.start_min"
+    print("SQL in getfeatures: " + qryExonPlot)
+    results = DBUtils.MariaGetData(db, qryExonPlot)
+    DBUtils.MariaClose(db)
+
+    '''
+    undef @ features;
+    while (my @ arry = $sth->fetchrow_array())
+        my @ temp;
+
+        foreach my $line( @ arry)
+            if (defined  $line)
+                push @ temp, $line;
+            else
+                push @ temp, -1;  # set to -1 when any element is missing
+        push @ features, [ @ temp];
+    '''
+    features = _createclean2Darry(results)
+
+    jsonret['features'] = features
+    jsonret['status'] = 4
+    return jsonret
+
+
+def _getScaffold(organism, scaffold, version):
+    jsonret = {'status':-1}
+    '''
+    my $qryExonPlot = "select sequence ,na_sequence_id
+        from externalnasequence where
+        taxon_id =$organism
+        and source_id = '$scaffold'
+        and sequence_type_id = 1
+        and sequence_version = '$version'";
+    my $sth = $dbh->prepare($qryExonPlot);
+    $sth->execute | | die "error in executing query";
+    '''
+    db = DBUtils.MariaConnection('DOTS')
+    qryExonPlot = "select sequence ,na_sequence_id from externalnasequence where " \
+                " taxon_id = " + str(organism) + \
+                " and source_id = '" + str(scaffold) + "'" + \
+                " and sequence_type_id = 1" +\
+                " and sequence_version = '" + str(version) + "'"
+    results = DBUtils.MariaGetData(db, qryExonPlot)
+    DBUtils.MariaClose(db)
+
+    '''
+    undef @ features;
+    while (my @ arry = $sth->fetchrow_array())
+        my @ temp;
+        foreach my $line( @ arry)
+            if (defined  $line)
+                push @ temp, $line;
+            else
+                push @ temp, -1;  # set to -1 when any element is missing         
+    
+        push @ features, [ @ temp];
+
+    return @features;
+    '''
+    features = _createclean2Darry(results)
+    jsonret['features'] = features
+    jsonret['status'] = 5
+    return jsonret
+
+# Not called from anywhere
+def getnewfeatures():
+    #NOT CALLED
+    return None
+
+# Not called from anywhere
+def get_exon_info():
+    #NOT CALLED
+    return None
+
+
+def _trp_info(id, organism, scaffold, version):
+    jsonret = {'status': -1}
+    '''
+
+    my $dbh = DBI->connect($Defaults::db_ConnString1,$Defaults::db_UserName, $Defaults::db_Password, { RaiseError => 1, AutoCommit => 0}) || die "Error connecting to server";
+            my $sql;
+            if($id==1)
+            {
+    '''
+    db = DBUtils.MariaConnection('DOTS')
+    sql = "select nl.na_location_id,nl.start_min,nl.end_min,nl.is_reversed,nl.loc_order,nf.na_feature_id,"+\
+          " en.length,en.na_sequence_id,nl.is_excluded,nf.subclass_view,en.taxon_id,nf.string18"+\
+          " from externalnasequence en,nalocation nl ,nafeatureimp nf"+\
+          " where en.source_ID='" + str(scaffold)+ \
+          "' and en.taxon_id =" + str(organism)+\
+          " and en.sequence_version="+str(version)+\
+          " and nf.na_sequence_id=en.na_sequence_id"+\
+          " and( nf.subclass_view like '%tRNA%'"+\
+          " or nf.subclass_view like '%REPEAT%'"+\
+          " or nf.subclass_view like '%promoter%' "+\
+          " or nf.subclass_view like '%Transposon%')" +\
+          " and nl.na_feature_id =nf.na_feature_id"+\
+          " order by nl.start_min"
+    print("SQL in trp_info: "+sql)
+    results = DBUtils.MariaGetData(db, sql)
+    DBUtils.MariaClose(db)
+    '''       
+    #print "$sql\n";
+        $dbh->{'LongReadLen'} = $Defaults::db_MaxFetchSize;
+        $dbh->{'LongTruncOk'} = $Defaults::db_TruncateOnLong;
+
+        my $sth = $dbh->prepare($sql);
+
+        $sth->execute || die "error in executing query";
+        undef %trp1;
+        while ( my @arry = $sth->fetchrow_array())
+        {
+                my @temp;
+
+                foreach my $line (@arry)
+                {
+                        if ( defined  $line )
+                        {
+                                push @temp, $line;
+                        }
+                        else
+                        {
+                                push @temp, -1;   # set to -1 when any element is missing
+                        }
+                }
+                #print "$temp[5] <br>";
+                push @features, [ @temp ];
+
+                push(@{$trp1{$temp[9]}},[ @temp ]);
+
+
+        }
+        $sth->finish;
+        $dbh->disconnect;
+        return %trp1;
+    '''
+
+    ########## TODO : results to be accumulated into an array for tRNA, repeat etc.
+    features = _createclean2Darry(results)
+    trpl = {}
+
+    for temp in features:
+        # Adds temp array to the key 'temp[9]' in dict trpl
+        trpl[str(temp[9])] = temp
+    jsonret['trpl'] = trpl
+    jsonret['status'] = 6
+    return jsonret
+
+
+def _get_synteny_info(id, na_sequence_id, taxon, startbase, stopbase):
+    jsonret = {'status': -1}
+    '''
+    my $dbh = DBI->connect($Defaults::db_ConnString1,$Defaults::db_UserName, 
+              $Defaults::db_Password, { RaiseError => 1, AutoCommit => 0}) || die "Error connecting to server";
+    
+    
+    '''
+    db = DBUtils.MariaConnection('DOTS')
+    '''
+    "SELECT org.species, sa.query_start, sa.query_end, sa.is_reversed, sa.target_na_sequence_id, sa.query_taxon_id, sa.target_taxon_id, ena.source_id, sa.q_version,org.strain,sa.target_start,sa.target_end,sa.score,sa.evalue FROM externalnasequence ena, samalignment sa,oomycetes_cgl_sres.organism org WHERE sa.target_na_sequence_id =$na_sequence_id and sa.query_taxon_id !=$taxon AND sa.query_na_sequence_id = ena.na_sequence_id and org.taxon_id=sa.query_taxon_id and org.version=ena.sequence_version
+     and ((sa.target_start between $startbase and $stopbase) or (sa.target_end between $startbase and $stopbase) or 
+     ($stopbase between sa.target_start and sa.target_end)) ORDER BY sa.target_start"
+    '''
+    sql = "SELECT org.species, sa.query_start, sa.query_end, sa.is_reversed, sa.target_na_sequence_id, " + \
+          " sa.query_taxon_id, sa.target_taxon_id, ena.source_id, sa.q_version,org.strain,sa.target_start," + \
+          " sa.target_end,sa.score,sa.evalue " + \
+          " FROM externalnasequence ena, samalignment sa," + \
+          " oomycetes_cgl_sres.organism org WHERE " + \
+          " sa.target_na_sequence_id =" + str(na_sequence_id) + " and " + \
+          " sa.query_taxon_id != " + str(taxon) + " AND " + \
+          " sa.query_na_sequence_id = ena.na_sequence_id " + \
+          " and org.taxon_id=sa.query_taxon_id " + \
+          " and org.version=ena.sequence_version " + \
+          " and ((sa.target_start between "+str(startbase)+" and " + str(stopbase)+")" + \
+          " or (sa.target_end between "+str(startbase)+" and " + str(stopbase)+")" + \
+          " or (" + str(stopbase) + " between sa.target_start and sa.target_end)) ORDER BY sa.target_start"
+    print("SQL in get_synteny_info:" + sql)
+
+    #TODO: commented next line only for testing
+    #results = [[1,2,3,4,5,6,7,8,9,10], [1,2,3,4,5,6,7,8,9,10], [1,2,3,4,5,6,7,8,9,10], [1,2,3,4,5,6,7,8,9,10]]
+    results = DBUtils.MariaGetData(db, sql)
+    DBUtils.MariaClose(db)
+
+    features = _createclean2Darry(results)
+
+    # push( @ {$synteny{$temp[5]}->{$temp[7]}}, [ @ temp]);
+    synteny = {}
+
+    for temp in features:
+        # Adds temp array to dict synenty, (to represent sparse 2D array)
+        #synteny[str(temp[5])+"_"+str(temp[7])] = temp
+        if synteny.get(temp[5]) is None:
+            synteny[temp[5]] = []
+        synteny[temp[5]].append({str(temp[7]): temp})
+    jsonret['synteny'] = synteny
+    jsonret['status'] = 8
+    return jsonret
+
+
+def _get_est(id, na_sequence_id):
+    # oomycetes_cgl_dots
+    jsonret = {'status': -1}
+
+    features = []
+    synenty = {}
+
+    if id == 1:
+        db = DBUtils.MariaConnection('DOTS')
+        sql_query = "select distinct ena.name, ba.number_of_spans, ba.target_start, " \
+                    "ba.is_reversed, ba.blat_alignment_quality_id, ba.blocksizes," \
+                    "ba.tstarts,ena.sequence,ba.query_taxon_id,ena.sequence_version," \
+                    "ba.target_taxon_id,org.species from externalnasequence ena, " \
+                    "blatalignment ba,oomycetes_cgl_sres.organism org where ba.target_na_sequence_id="
+        sql_query = sql_query + "1" + " and ba.query_na_sequence_id=ena.na_sequence_id " \
+                                      "and org.taxon_id=ba.query_taxon_id " \
+                                      "order by ba.target_start"
+        #   TODO: replace "1" by str(na_sequence_id) in prev line
+        print(sql_query)
+        est_list = DBUtils.MariaGetData(db, sql_query)
+        DBUtils.MariaClose(db)
+
+        #while (my @ arry = $sth->fetchrow_array())
+        #   my @ temp;
+        #   foreach my $line( @ arry)
+        #       if (defined  $line)
+        #           push @ temp, $line;
+        #       else
+        #           push @ temp, -1;  # set to -1 when any element is missing
+        #   print "$temp[5] <br>";
+        #   push @ features, [ @ temp];
+        #   push( @ {$synteny{$temp[8]}}, [ @ temp]);
+        features = _createclean2Darry(est_list)
+        for temp in features:
+            # Adds temp array to the key 'temp[8]' in dict synenty
+            synenty[str(temp[8])] = temp
+
+        jsonret['est_list'] = est_list
+        jsonret['synenty'] = synenty
+        jsonret['status'] = 10
+        return jsonret
+    return jsonret
+
+##########################################
+# start drawing functions
+#
+def _TPRTrack(startbase, stopbase, organism, version, exons_r, otherlink, contig_count):
+
+    # drawing function
+    trp = exons_r
+    init_track = 135
+    gap = 30
+
+    color = 'blue'
+    i = []
+    j = 1
+    TRPTracks = {}
+    TRPTracks['tracks'] = []
+    TRPTracks['contig_count'] = contig_count
+
+    # Start of main for loop
+    for key in trp:
+        i = trp[key]
+        leftstring = key
+        if leftstring == 'tRNA':
+            color = 'pink'
+        elif leftstring == 'PROMOTOR':
+            color = 'maroon'
+        elif leftstring == 'REPEAT':
+            color = 'khaki'
+        # Start of inner loop
+
+        # end of inner loop
+        horzlevelCoding = init_track + j * gap
+        one_track = {'label': leftstring}
+        one_track['color'] = color
+
+        if browserDrawing.valid_exon_ends(i[1], i[2]) == False:
+            continue
+        features = {'l': i[1],'r': i[2],'h': horzlevelCoding,'Id': i[5],'color': color}
+        features['link'] = Defaults.GetQualifiedLink('promo', START=i[7], LEN=i[8],
+                                                        VERSION=version, COLLAPSE=0, FEATURE_ID=i[5])
+        if i[3] == 1:
+            features['arrow'] = 'l'
+        else:
+            features['arrow'] = 'r'
+        one_track['Rects'] = features
+        TRPTracks['tracks'].append(one_track)
+        j = j + 1
+    # end of main for loop
+
+    return TRPTracks
+
+
+
+# These are drawing functions
+def _SyntenyTracks(startbase, stopbase, exons_r, detail_Link, scaffold, track_pos):
+    SyntenyTracks = {'label-heading': 'LASTZ alignment'}
+    SyntenyTracks['tracks'] = []
+    SyntenyTracks['contig_count'] = 999
+
+    TrackColorMap = {100:'red',
+                     90: 'violet',
+                     80: 'aqua',
+                     70: 'black',
+                     60: 'Lime'}
+
+    horzlevelCoding = 0
+    rowht_1 = 5
+    synteny1 = exons_r
+    i = 1
+
+    #for my $taxon(keys % synteny1)
+    #{
+    for taxon in synteny1:
+        # taxon is "4781" or similar
+        #for my $scaffold(keys % {$synteny1{$taxon}})
+        #{
+        arr_scaffolds = synteny1[taxon]
+        any_scaffold_key = list(arr_scaffolds[0].keys())[0]
+        any_scaffold = arr_scaffolds[0][any_scaffold_key]
+        one_track = {'label': any_scaffold[0] + " " + any_scaffold[9]}
+        one_track['Rects'] = []
+
+        for scaffold_dict in arr_scaffolds:
+            scaffold_key = list(scaffold_dict.keys())[0]
+            scaffold = scaffold_dict[scaffold_key]
+            #print(scaffold)
+            # scaffold has a value like this
+            '''
+            scaffold = ['Pythium aphanidermatum',  //index 0
+                             56738,                //index 1  - start location
+                             58683,                //index 2  - end location
+                             0,
+                             1,
+                             1223555,              //index 5  - organism No
+                             890382,               //index 6
+                             'Scaffold_125',        
+                             1.0,                  //index 8 - version
+                             'DAOMBR4440',         //index 9
+                             30838,                //index 10 - start pos
+                             32486,                //index 11 - end pos
+                             60,                   //index 12
+                             '1'
+                        ]
+            '''
+            scaffold_rect = {'label': "TODO...."}
+
+            #my @ pos = @ {$synteny1{$taxon}{$scaffold}};
+
+
+            '''
+            # main drawing part start
+            base_start;
+            my $synteny_gap=24;
+
+            if ($track_pos == 0)
+                $base_start=140;
+            elsif($track_pos == 1)
+                $base_start=180;
+            elsif($track_pos == 2)
+                $base_start=220;
+            elsif($track_pos == 3)
+                $base_start=250;
+            else
+                $base_start=280;
+            '''
+            base_start = 0
+            synteny_gap = 24
+            if track_pos == 0:
+                base_start=140
+            elif track_pos == 1:
+                base_start=180
+            elif track_pos == 2:
+                base_start=220
+            elif track_pos == 3:
+                base_start=250
+            else:
+                base_start=280
+
+
+            count = len(arr_scaffolds)
+            track_color = ''
+
+            #for my $k ( 0..$  # pos)
+            #{
+            '''
+                # print "hi $pos[$k][3] ";
+                if ( defined  $pos[$k][10] & & defined  $pos[$k][11])
+                {
+                    if ($pos[$k][12] == 100 )
+                        $track_color=$red;
+                    elsif($pos[$k][12] == 90 )
+                        $track_color=$violet;
+                    elsif($pos[$k][12] == 80 )
+                        $track_color=$aqua;
+                    elsif($pos[$k][12] == 70 )
+                        $track_color=$black;
+                    elsif($pos[$k][12] == 60 )
+                        $track_color=$Lime;
+                }
+            '''
+            dict_color = TrackColorMap.get(scaffold[12])
+            if dict_color is not None:
+                track_color = dict_color
+
+            '''
+                if ( $pos[$k][11] < 0 | | $pos[$k][10] < 0 )  # skipping cases where the start or end of an exon is missing.
+                    next;
+                @ temp = & getStartBaseEndBase($start_base, $end_base, $pos[$k][10], $pos[$k][11]);
+                if ($temp[0][0] == -1)
+                    next;
+                else
+                {
+                    $pos[$k][10] = $temp[0][0];
+                    $pos[$k][11] = $temp[0][1];
+                }
+                if ( $pos[$k][11] > $pos[$k][10] )
+                {
+                    $start_min=$leftedge+ ($pos[$k][10] -  $start_base) * $fraction;
+                    $end_min=$leftedge+ ($pos[$k][11] -$start_base) * $fraction;
+
+                    $image->filledRectangle($start_min, $horzlevelCoding, $end_min, $horzlevelCoding + $rowht_1, $track_color);
+                    $coordstring = join(",", $start_min, $horzlevelCoding, $end_min, $horzlevelCoding + $rowht_1);
+
+                    & printMapping($coordstring, "$pos[$k][0]:$scaffold:$pos[$k][1]-$pos[$k][2]", $pos[$k][8], $pos[$k][5], $pos[$k][8], $detail_Link, $pos[$k][1], $pos[$k][2]-$pos[$k][1], $pos[$k][7]);
+
+                }
+            '''
+            if browserDrawing.valid_exon_ends(scaffold[10], scaffold[11]) == False:
+                continue
+            scaffold_rect['l'] = scaffold[10]
+            scaffold_rect['r'] = scaffold[11]
+            scaffold_rect['h'] = horzlevelCoding
+            scaffold_rect['color'] = track_color
+            # "$pos[$k][0]:$scaffold:$pos[$k][1]-$pos[$k][2]"
+            scaffold_rect['label'] = scaffold[0] + ":" + scaffold_key + ":" + \
+                                     str(scaffold[1]) + "-" + str(scaffold[2])
+            scaffold_rect['link'] = Defaults.GetQualifiedLink('syntenylink', \
+                        START = scaffold[1], LEN = scaffold[2] - scaffold[1], \
+                        ORGANISM_NO = scaffold[5], VERSION = scaffold[8], SCAFFOLD = scaffold[7], \
+                        COLLAPSE = 0)
+
+            #} //end of for my $k ( 0..$  # pos)
+
+            '''
+            my $poly = new GD::Polygon;
+            if ($pos[$k][3] == 1)
+            {
+                $poly->addPt( $leftedge + ( $pos[$k][10] - $start_base ) * $fraction, $horzlevelCoding );
+                $poly->addPt( $leftedge + ( $pos[$k][10] - $start_base ) * $fraction, $horzlevelCoding + $rowht_1 );
+                $poly->addPt( $leftedge + ( $pos[$k][10] - $start_base ) * $fraction - 3, $horzlevelCoding + $rowht_1 / 2 );
+                $image->filledPolygon( $poly, $track_color );
+            }
+            else
+            {
+                $poly->addPt( $leftedge + ( $pos[$k][11] - $start_base ) * $fraction, $horzlevelCoding );
+                $poly->addPt( $leftedge + ( $pos[$k][11] - $start_base ) * $fraction, $horzlevelCoding + $rowht_1 );
+                $poly->addPt( $leftedge + ( $pos[$k][11] - $start_base ) * $fraction + 3, $horzlevelCoding + $rowht_1 / 2 );
+                $image->filledPolygon( $poly, $track_color );
+
+            }
+            '''
+            if scaffold[3] == 1:
+                scaffold_rect['arrow'] = 'l'
+            else:
+                scaffold_rect['arrow'] = 'r'
+            # main drawing part end
+
+            one_track['Rects'].append(scaffold_rect)
+
+        # endof of for scaffold_key in arr_scaffolds
+        SyntenyTracks['tracks'].append(one_track)
+
+        i += 1
+    #end of for taxon in synteny1:
+    #}
+
+    return SyntenyTracks
+
+
+
+
+def _EstTracks(startbase, jsondata, config, estlink, field1, contig_count, synteny_end):
+    #field1 unused
+    jsonret = {'status': 11}
+    jsonret['contig_count'] = 444
+    return jsonret
+
+
+
+
+def gff_track():
+    #NOT CALLED
+    return None
+
+def plot_gene():
+    #NOT CALLED
+    return None
+
+
+def get_tab():
+    #NOT CALLED
+    return None
+
+
+def get_tab():
+    # Not required
+    #NOT CALLED
+    return None

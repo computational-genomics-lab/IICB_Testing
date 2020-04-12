@@ -1,0 +1,218 @@
+# Function to be called for Chromosome page
+from django.http import JsonResponse
+from django.core import serializers
+import os
+import mysql.connector
+import array
+import json
+from django.http import response
+from rest_framework.decorators import api_view
+from . import Defaults
+from . import browserUIHandlers
+
+# Expected JSON payload
+'''
+{
+    "startbase": 1,
+    "stopbase": 150000,
+    "label": "Phytophthora sojae  (V1.0)",
+    "version": 1,
+    "organism": 67593,
+    "star": null,
+    "scaffold": "Scaffold_1"
+}
+'''
+
+rowht = 7  # thickness of the rows
+rowgap = 50  # gap between the lower border of one track and the top border of the next track
+minorgap = 10  # gap between rows that belong to the same track
+topoffset = 20  # the top offset to print the base position nos.
+horzlevel = rowgap + topoffset  # the starting horzlevel of the first track
+breadth = 700  # the actual gap between the startbase and the endbase
+leftedge = 250  # the starting point of the startbase
+rightedge = leftedge + breadth  # the end point of the endbase
+connectionBarHt = 6  # the thickness of the connection bar that exons of the same feature
+height = 1030  # the height of the image drawn
+diff = 10  # gap between two vertical lines
+
+dividerLevel = 2 * (topoffset + rowht + (rowgap / 2))  # Starting y coordinate of dividing line
+
+scaffold_present = 1
+
+
+@api_view(['POST'])
+def chromosomePageUI(request):
+    #print(request.body)
+    body_unicode = request.body.decode(encoding='utf-8')
+    #jsondata = {}
+    jsondata = json.loads(body_unicode)
+    print(jsondata)
+
+    jsonret = {'status' : -1}
+    jsonret['input_params'] = jsondata
+    # Declare global variable
+    global rowht  # thickness of the rows
+    global rowgap  # gap between the lower border of one track and the top border of the next track
+    global minorgap  # gap between rows that belong to the same track;
+    global topoffset  # the top offset to print the base position nos.
+    global horzlevel  # the starting horzlevel of the first track
+    global breadth  # the actual gap between the startbase and the endbase
+    global leftedge  # the starting point of the startbase
+    global rightedge  # the end point of the endbase
+    global connectionBarHt  # the thickness of the connection bar that exons of the same feature
+    global height  # the height of the image drawn
+    global diff  # gap between two vertical lines
+
+    global dividerLevel  # Starting y coordinate of dividing line
+
+    global scaffold_present  # 1  = the scaffold is in the database and it has coding regions
+                             # 0  = the scaffold is in the database but does not have any coding regions
+                             # -1 = the scaffold in not in the database
+    # endof global variable declaration
+
+    '''
+    # Defining image attributes as globals..
+    our($image, $lightyellow, $darkgrey, $blue, $white, $darkgreen, $lightgreen, $green, $red, $black, $grey, $yellow, $pink, $brown,$khaki,$pink1,$maroon, $contigsColor)
+    our % contigsColorForQuality
+    our $imagefile_name;
+    our $downloadFile_name;
+    our $cgi_session_id = $FORM{'id'};
+    our($firebrick,$orange,$gold,$olive,$spring_green,$aqua,$violet,$sandy,$chocolate,$crimson,$gray_1,$Lime,$golden_rod,$lawn_green,$pale_green,$pale_turquoise,$dark_olive_green,$wheat,$peach_puff);  # for synteny
+    
+    # creating a new image, allocating its area
+    $image = new GD::Image(1000, 1030);
+    '''
+    jsonret['image_params'] = {'length': 1000, 'width': 1300}
+
+    '''
+    # allocating some colors
+    # the background is set to the first allocated color
+    $white = $image->colorAllocate(255, 255, 255);
+    $lightyellow = $image->colorAllocate(250, 250, 210);
+    # $blue = $image->colorAllocate(0,0,255);
+    $blue = $image->colorAllocate(0, 122, 203);
+    $darkgreen = $image->colorAllocate(0, 255, 0);
+    $lightgreen = $image->colorAllocate(220, 255, 220);
+    # $green = $image->colorAllocate(0,255,200);
+    $green = $image->colorAllocate(81, 229, 18);
+    $red = $image->colorAllocate(255, 0, 0);
+    $pink = $image->colorAllocate(255, 0, 255);
+    $black = $image->colorAllocate(0, 0, 0);
+    $grey = $image->colorAllocate(200, 200, 200);
+    $darkgrey = $image->colorAllocate(105, 105, 105);
+    $yellow = $image->colorAllocate(255, 255, 0);
+    $brown = $image->colorAllocate(175, 115, 0);
+    $khaki = $image->colorAllocate(240, 177, 29);
+    $pink1 =$image->colorAllocate(240, 60, 222);
+    $maroon =$image->colorAllocate(232, 18, 104);
+    $white = $image->colorAllocate(255, 255, 255);
+    $lightyellow = $image->colorAllocate(250, 250, 210);
+    # $blue = $image->colorAllocate(0,0,255);
+    $blue = $image->colorAllocate(0, 122, 203);
+    $darkgreen = $image->colorAllocate(0, 255, 0);
+    $lightgreen = $image->colorAllocate(220, 255, 220);
+    # $green = $image->colorAllocate(0,255,200);
+    $green = $image->colorAllocate(81, 229, 18);
+    $red = $image->colorAllocate(255, 0, 0);
+    $pink = $image->colorAllocate(255, 0, 255);
+    $black = $image->colorAllocate(0, 0, 0);
+    $grey = $image->colorAllocate(200, 200, 200);
+    $darkgrey = $image->colorAllocate(105, 105, 105);
+    $yellow = $image->colorAllocate(255, 255, 0);
+    $brown = $image->colorAllocate(175, 115, 0);
+    $khaki = $image->colorAllocate(240, 177, 29);
+    $pink1 =$image->colorAllocate(240, 60, 222);
+    $maroon =$image->colorAllocate(232, 18, 104);
+    
+    # color code for synteny data start
+    $firebrick =$image->colorAllocate(178, 34, 34);
+    $orange =$image->colorAllocate(255, 69, 0);
+    $gold =$image->colorAllocate(255, 215, 0);
+    $olive =$image->colorAllocate(128, 128, 0);
+    # $spring_green=$image->colorAllocate(0,255,127);
+    $spring_green =$image->colorAllocate(102, 0, 51);
+    
+    # $aqua=$image->colorAllocate(127,255,212);
+    $aqua =$image->colorAllocate(0, 0, 153);
+    
+    $violet =$image->colorAllocate(148, 0, 211);
+    # $sandy=$image->colorAllocate(244,164,96);
+    $sandy =$image->colorAllocate(0, 51, 51);
+    $chocolate =$image->colorAllocate(210, 105, 30);
+    $crimson =$image->colorAllocate(100, 149, 237);
+    $gray_1 =$image->colorAllocate(128, 128, 128);
+    $Lime =$image->colorAllocate(0, 128, 128);
+    $golden_rod =$image->colorAllocate(218, 165, 32);
+    $lawn_green =$image->colorAllocate(124, 252, 0);
+    # $pale_green=$image->colorAllocate(152,251,152);
+    
+    $pale_green =$image->colorAllocate(72, 61, 139);
+    $pale_turquoise =$image->colorAllocate(139, 0, 139);
+    # $pale_turquoise=$image->colorAllocate(175,238,238);
+    $dark_olive_green =$image->colorAllocate(85, 107, 47);
+    $wheat =$image->colorAllocate(60, 179, 113);
+    # $peach_puff=$image->colorAllocate(255,218,185);
+    $peach_puff =$image->colorAllocate(95, 158, 160);
+    
+    # color code for synteny data end
+    '''
+
+
+    '''
+    % contigsColorForQuality = (1 = > $red,  # Best Blat_Alignment_Quality_ID
+    2 = > $violet,
+    3 = > $aqua,
+    4 = > $black  # Worst Blat_Alignment_Quality_ID
+    '''
+    jsonret['contigsColorForQuality'] = Defaults.contigsColorForQuality
+
+    '''
+    # making the background transparent and image interlaced
+    $image->transparent($white);
+    $image->interlaced('false');
+    
+    # making the left and right boundary line and also faded lines inbetween
+    $image->line( $leftedge, $topoffset, $leftedge, $height + $topoffset, $darkgreen);
+    $image->line( $rightedge, $topoffset, $rightedge, $height + $topoffset, $darkgreen);
+
+    #  For drawing vertical scales
+    for (my $i = $leftedge + $diff; $i < $rightedge; $i = $i + $diff)
+        if ($i % 50 == 0)
+            $image->line( $i, $topoffset, $i, $height + $topoffset, $grey);
+        else
+            $image->line( $i, $topoffset, $i, $height + $topoffset, $lightgreen);
+    '''
+    jsonret['vline'] = {'top': topoffset,
+                        'bottom': height+topoffset,
+                        'left': leftedge,
+                        'right': rightedge,
+                        'minor_step': diff,
+                        'major_step': 50,
+                        'border_color': 'darkgreen',
+                        'minor_axis_color': 'grey',
+                        'major_axis_color': 'lightgreen'
+                        }
+
+    '''
+    $imagefile_name = $cgi_session_id."_browser.png";
+    $downloadFile_name = $cgi_session_id."_download.txt";
+    print "<map name=\"maptest\" class=\"map_class\" >";
+    '''
+
+    jsonret['top_label'] = browserUIHandlers.get_organism(jsondata['organism'], jsondata['version'])
+
+    # Display the proper view of the data
+    # $scaffold_present = & changeView(\ % FORM);
+    changeView_val = browserUIHandlers.changeView(jsondata)
+    jsonret['changeView'] = changeView_val
+
+    return JsonResponse(jsonret)
+
+    #jsonret_forD3Drawing = ConvertToD3format(jsonret)
+    #return JsonResponse(jsonret_forD3Drawing)
+
+
+def ConvertToD3format(input_json):
+    # [TODO]
+    return input_json
+

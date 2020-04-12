@@ -1,0 +1,503 @@
+# Function to be called for Chromosome page
+from django.http import JsonResponse
+from django.core import serializers
+import os
+import mysql.connector
+import array
+import json
+from django.http import response
+from rest_framework.decorators import api_view
+from . import Defaults
+from . import browserUIHandlers
+
+#required for get_non_coding_sequence
+from . import function
+
+rowht = 7  # thickness of the rows
+rowgap = 50  # gap between the lower border of one track and the top border of the next track
+minorgap = 10  # gap between rows that belong to the same track
+topoffset = 20  # the top offset to print the base position nos.
+horzlevel = rowgap + topoffset  # the starting horzlevel of the first track
+breadth = 700  # the actual gap between the startbase and the endbase
+leftedge = 250  # the starting point of the startbase
+rightedge = leftedge + breadth  # the end point of the endbase
+connectionBarHt = 6  # the thickness of the connection bar that exons of the same feature
+height = 1030  # the height of the image drawn
+diff = 10  # gap between two vertical lines
+
+dividerLevel = 2 * (topoffset + rowht + (rowgap / 2))  # Starting y coordinate of dividing line
+
+scaffold_present = 1
+
+def massage_request_json(request):
+    body_unicode = request.body.decode(encoding='utf-8')
+    #jsondata = {}
+    jsondata = json.loads(body_unicode)
+    print(jsondata)
+
+    if jsondata.get('organism') is not None:
+        if isinstance(jsondata['organism'], str):
+            jsondata['organism'] = int(jsondata['organism'])
+    if jsondata.get('startbase') is not None:
+        if isinstance(jsondata['startbase'], str):
+            jsondata['startbase'] = int(jsondata['startbase'])
+    if jsondata.get('stopbase') is not None:
+        if isinstance(jsondata['stopbase'], str):
+            jsondata['stopbase'] = int(jsondata['stopbase'])
+    if jsondata.get('len') is not None:
+        if isinstance(jsondata['len'], str):
+            jsondata['len'] = int(jsondata['len'])
+    if jsondata.get('version') is not None:
+        if isinstance(jsondata['version'], str):
+            jsondata['version'] = int(jsondata['version'])
+    return jsondata
+
+
+###################################################
+# Function to call for viewing chromosome page
+###################################################
+# Expected JSON payload
+'''
+{
+    "startbase": 1,
+    "stopbase": 150000,
+    "label": "Phytophthora sojae  (V1.0)",
+    "version": 1,
+    "organism": 67593,
+    "star": null,
+    "scaffold": "Scaffold_1"
+}
+'''
+
+@api_view(['POST'])
+def chromosomePageUI(request):
+    #print(request.body)
+    jsondata = massage_request_json(request)
+
+    jsonret = {'status' : -1}
+    jsonret['input_params'] = jsondata
+    # Declare global variable
+    global rowht  # thickness of the rows
+    global rowgap  # gap between the lower border of one track and the top border of the next track
+    global minorgap  # gap between rows that belong to the same track;
+    global topoffset  # the top offset to print the base position nos.
+    global horzlevel  # the starting horzlevel of the first track
+    global breadth  # the actual gap between the startbase and the endbase
+    global leftedge  # the starting point of the startbase
+    global rightedge  # the end point of the endbase
+    global connectionBarHt  # the thickness of the connection bar that exons of the same feature
+    global height  # the height of the image drawn
+    global diff  # gap between two vertical lines
+
+    global dividerLevel  # Starting y coordinate of dividing line
+
+    global scaffold_present  # 1  = the scaffold is in the database and it has coding regions
+                             # 0  = the scaffold is in the database but does not have any coding regions
+                             # -1 = the scaffold in not in the database
+    # endof global variable declaration
+
+    '''
+    # Defining image attributes as globals..
+    our($image, $lightyellow, $darkgrey, $blue, $white, $darkgreen, $lightgreen, $green, $red, $black, $grey, $yellow, $pink, $brown,$khaki,$pink1,$maroon, $contigsColor)
+    our % contigsColorForQuality
+    our $imagefile_name;
+    our $downloadFile_name;
+    our $cgi_session_id = $FORM{'id'};
+    our($firebrick,$orange,$gold,$olive,$spring_green,$aqua,$violet,$sandy,$chocolate,$crimson,$gray_1,$Lime,$golden_rod,$lawn_green,$pale_green,$pale_turquoise,$dark_olive_green,$wheat,$peach_puff);  # for synteny
+    
+    # creating a new image, allocating its area
+    $image = new GD::Image(1000, 1030);
+    '''
+    jsonret['image_params'] = {'length': 1000, 'width': 1300}
+
+    '''
+    # allocating some colors
+    # the background is set to the first allocated color
+    $white = $image->colorAllocate(255, 255, 255);
+    $lightyellow = $image->colorAllocate(250, 250, 210);
+    # $blue = $image->colorAllocate(0,0,255);
+    $blue = $image->colorAllocate(0, 122, 203);
+    $darkgreen = $image->colorAllocate(0, 255, 0);
+    $lightgreen = $image->colorAllocate(220, 255, 220);
+    # $green = $image->colorAllocate(0,255,200);
+    $green = $image->colorAllocate(81, 229, 18);
+    $red = $image->colorAllocate(255, 0, 0);
+    $pink = $image->colorAllocate(255, 0, 255);
+    $black = $image->colorAllocate(0, 0, 0);
+    $grey = $image->colorAllocate(200, 200, 200);
+    $darkgrey = $image->colorAllocate(105, 105, 105);
+    $yellow = $image->colorAllocate(255, 255, 0);
+    $brown = $image->colorAllocate(175, 115, 0);
+    $khaki = $image->colorAllocate(240, 177, 29);
+    $pink1 =$image->colorAllocate(240, 60, 222);
+    $maroon =$image->colorAllocate(232, 18, 104);
+    $white = $image->colorAllocate(255, 255, 255);
+    $lightyellow = $image->colorAllocate(250, 250, 210);
+    # $blue = $image->colorAllocate(0,0,255);
+    $blue = $image->colorAllocate(0, 122, 203);
+    $darkgreen = $image->colorAllocate(0, 255, 0);
+    $lightgreen = $image->colorAllocate(220, 255, 220);
+    # $green = $image->colorAllocate(0,255,200);
+    $green = $image->colorAllocate(81, 229, 18);
+    $red = $image->colorAllocate(255, 0, 0);
+    $pink = $image->colorAllocate(255, 0, 255);
+    $black = $image->colorAllocate(0, 0, 0);
+    $grey = $image->colorAllocate(200, 200, 200);
+    $darkgrey = $image->colorAllocate(105, 105, 105);
+    $yellow = $image->colorAllocate(255, 255, 0);
+    $brown = $image->colorAllocate(175, 115, 0);
+    $khaki = $image->colorAllocate(240, 177, 29);
+    $pink1 =$image->colorAllocate(240, 60, 222);
+    $maroon =$image->colorAllocate(232, 18, 104);
+    
+    # color code for synteny data start
+    $firebrick =$image->colorAllocate(178, 34, 34);
+    $orange =$image->colorAllocate(255, 69, 0);
+    $gold =$image->colorAllocate(255, 215, 0);
+    $olive =$image->colorAllocate(128, 128, 0);
+    # $spring_green=$image->colorAllocate(0,255,127);
+    $spring_green =$image->colorAllocate(102, 0, 51);
+    
+    # $aqua=$image->colorAllocate(127,255,212);
+    $aqua =$image->colorAllocate(0, 0, 153);
+    
+    $violet =$image->colorAllocate(148, 0, 211);
+    # $sandy=$image->colorAllocate(244,164,96);
+    $sandy =$image->colorAllocate(0, 51, 51);
+    $chocolate =$image->colorAllocate(210, 105, 30);
+    $crimson =$image->colorAllocate(100, 149, 237);
+    $gray_1 =$image->colorAllocate(128, 128, 128);
+    $Lime =$image->colorAllocate(0, 128, 128);
+    $golden_rod =$image->colorAllocate(218, 165, 32);
+    $lawn_green =$image->colorAllocate(124, 252, 0);
+    # $pale_green=$image->colorAllocate(152,251,152);
+    
+    $pale_green =$image->colorAllocate(72, 61, 139);
+    $pale_turquoise =$image->colorAllocate(139, 0, 139);
+    # $pale_turquoise=$image->colorAllocate(175,238,238);
+    $dark_olive_green =$image->colorAllocate(85, 107, 47);
+    $wheat =$image->colorAllocate(60, 179, 113);
+    # $peach_puff=$image->colorAllocate(255,218,185);
+    $peach_puff =$image->colorAllocate(95, 158, 160);
+    
+    # color code for synteny data end
+    '''
+
+
+    '''
+    % contigsColorForQuality = (1 = > $red,  # Best Blat_Alignment_Quality_ID
+    2 = > $violet,
+    3 = > $aqua,
+    4 = > $black  # Worst Blat_Alignment_Quality_ID
+    '''
+    jsonret['contigsColorForQuality'] = Defaults.contigsColorForQuality
+
+    '''
+    # making the background transparent and image interlaced
+    $image->transparent($white);
+    $image->interlaced('false');
+    
+    # making the left and right boundary line and also faded lines inbetween
+    $image->line( $leftedge, $topoffset, $leftedge, $height + $topoffset, $darkgreen);
+    $image->line( $rightedge, $topoffset, $rightedge, $height + $topoffset, $darkgreen);
+
+    #  For drawing vertical scales
+    for (my $i = $leftedge + $diff; $i < $rightedge; $i = $i + $diff)
+        if ($i % 50 == 0)
+            $image->line( $i, $topoffset, $i, $height + $topoffset, $grey);
+        else
+            $image->line( $i, $topoffset, $i, $height + $topoffset, $lightgreen);
+    '''
+    jsonret['vline'] = {'top': topoffset,
+                        'bottom': height+topoffset,
+                        'left': leftedge,
+                        'right': rightedge,
+                        'minor_step': diff,
+                        'major_step': 50,
+                        'border_color': 'darkgreen',
+                        'minor_axis_color': 'grey',
+                        'major_axis_color': 'lightgreen'
+                        }
+
+    '''
+    $imagefile_name = $cgi_session_id."_browser.png";
+    $downloadFile_name = $cgi_session_id."_download.txt";
+    print "<map name=\"maptest\" class=\"map_class\" >";
+    '''
+
+    jsonret['top_label'] = browserUIHandlers.get_organism(jsondata['organism'], jsondata['version'])
+
+    # Display the proper view of the data
+    # $scaffold_present = & changeView(\ % FORM);
+    changeView_val = browserUIHandlers.changeView(jsondata)
+    jsonret['changeView'] = changeView_val
+
+    jsonret_D3Drawing = ConvertToD3format(jsonret)
+    #jsonret_D3Drawing['changeView'] = changeView_val
+    return JsonResponse(jsonret_D3Drawing)
+
+
+###################################################
+# helper Functions (internally called) for viewing chromosome page
+###################################################
+def _createHeadingTrack(label):
+    track = {'trackName': label,
+             'trackType': 'stranded',
+             'visible': True,
+             'showLabels': True,
+             'items': [],
+             #TODO others ...
+            }
+    return track
+
+def _createNormalTrack(label, arr_rect, is_strandred):
+    track = {'trackName': label,
+             'trackType': 'stranded',
+             'visible': True,
+             'inner_radius': 80,
+             'outer_radius': 120,
+             'trackFeatures': 'complex',
+             'featureThreshold': 7000000,
+             'mouseover_callback': 'islandPopup',
+             'mouseout_callback': 'islandPopupClear',
+             'linear_mouseclick': [
+                 'linearPopup',
+                 'linearClick'
+             ],
+             'showLabels': True,
+             'showTooltip': True,
+             }
+
+    track['items'] = []
+
+
+    if is_strandred == 1:
+        track['trackType'] = 'stranded'
+    else:
+        track['trackType'] = 'track'
+
+    for rect in arr_rect:
+        one_item = {'id': rect['id'],
+                    'start': rect['l'],
+                    'end' : rect['r'],
+                    'name': rect['name']
+                    }
+        if rect.get('color') is not None:
+            one_item['color'] = rect['color']
+        if rect.get('arrow') is not None:
+            one_item['arrow'] = rect['arrow']
+        if rect.get('link') is not None:
+            one_item['link'] = rect['link']
+
+        if is_strandred == 1:
+            if rect.get('h') == 120:
+                one_item['strand'] = 1
+            else:
+                one_item['strand'] = -1
+
+        track['items'].append(one_item)
+
+    return track
+
+
+def ConvertToD3format(input_json):
+    output_json = {'input_params': input_json['input_params'],
+                   'top_label': input_json['top_label'],
+                   'contigsColorForQuality': input_json['contigsColorForQuality'],
+                   'tracks': []
+                   }
+    arr_drawing = input_json['changeView']['drawing']
+
+
+    for track_class in arr_drawing:
+
+        #heading type
+        label_heading = track_class.get('label-heading')
+        if label_heading is not None:
+            one_track = _createHeadingTrack(label_heading)
+            output_json['tracks'].append(one_track)
+        # end of heading type
+
+        # tracks
+        arr_track = track_class.get('tracks')
+        stranded = 0
+        if arr_track is None:
+            # simple track_class - NonCoding and Gene Models
+            # Rects can be added
+            if track_class.get('stranded') is not None:
+                stranded = 1
+            one_track = _createNormalTrack(track_class['label'], track_class['Rects'], stranded)
+            output_json['tracks'].append(one_track)
+        else:
+            # composite track_class - tRNA+repaet, LASTZ alignment, BLAT ...
+            # Get rects from individual tracks
+            for track in arr_track:
+                # Rects can be added
+                one_track = _createNormalTrack(track['label'], track['Rects'], stranded)
+                output_json['tracks'].append(one_track)
+            # end of for track in arr_track
+        # end of if simple or composite track_class
+
+    # end of for track_class in arr_drawing:
+
+    return output_json
+
+###################################################
+# END helper Functions (internally called) for viewing chromosome page
+###################################################
+
+
+###################################################
+# Function to call for sequence detail page (non-coding details)
+###################################################
+# 
+
+@api_view(['POST'])
+def sequenceDetailUI(request):
+    #print(request.body)
+    jsondata = massage_request_json(request)
+
+    jsonret = {'status' : -1}
+    jsonret['input_params'] = jsondata
+    
+
+    # non- coding region
+    '''Expected JSON payload
+    {
+        "organism": 67593,
+        "scaffold": "Scaffold_1"
+        "version": 1,
+        "startbase": 1,
+        "len": 150000,
+    }
+    '''
+    if jsondata['link'] == "lnkNonCoding":   
+        jsonret['Description'] = "Non coding region"
+        result_json = function.get_non_coding_sequence(jsondata['organism'], jsondata['scaffold'], jsondata['version'], \
+                         jsondata['startbase'], jsondata['len'])
+        # <div class="id_name"> Location : </div>
+        # <div class="content"> $org_name:$FORM{'StartPosition'}- $end_position</div>
+        end_pos = jsondata['startbase'] + jsondata['len']
+        jsonret['Location'] = result_json['org_name'] + ":" + str(jsondata['startbase']) + "-" + str(end_pos)
+        jsonret['Table'] = []
+        jsonret['Sequence_len'] = result_json['len']
+        jsonret['Sequence'] = result_json['req_str']
+
+        # Gene models
+        '''Expected JSON payload
+        {
+            "organism":890382,
+            "len": 58,   # this is ID
+            "version": 1
+        } '''
+    elif jsondata['link'] == "lnkCoding":
+        ID = jsondata['len']
+        ver = jsondata['version']
+        taxon_id = jsondata['organism']
+
+        # @info1 = &GetCommonFeatures(1,$FORM{'ID'},$FORM{'organism'});   #for information about gene
+        info1 = function._getCommonFeatures(1, ID, taxon_id)['features']
+        info2 = function._getCommonFeatures(2, ID, taxon_id)['features']
+        info15 = function._getCommonFeatures(15, ID, taxon_id)['features']
+        info16 = function._getCommonFeatures(16, ID, taxon_id)['features']
+
+        organism_label = browserUIHandlers.get_organism(taxon_id, ver)
+        jsonret['Organism_name'] = organism_label 
+        #header portion
+        # <div class="id_name"> Transcript Name : </div>
+        # <div class="content"> $info1[0][3]</div>
+        jsonret['Trans_name'] = info1[0][3]
+        
+        # my $start_range=$info1[0][1]-1000;
+        # my $end_range=$info1[0][2]+1000;
+        start_range = info1[0][1] - 1000
+        stop_range = info1[0][2] + 1000
+
+        # <div class="id_name"> Location : </div>
+        # <div class="content"> 
+        # <a href="/cgi-bin/eumicrobedb/browserUI.cgi?scaffold=$info1[0][8]
+        #                  &startbase=$start_range&stopbase=$end_range&organism=$FORM{'organism'}
+        #                  &version=$FORM{'version'}&action=refresh&action_params=1">
+        #         $info1[0][8] : $info1[0][1] - $info1[0][2]</a>
+        # </div>
+
+        jsonret['Location'] = info1[0][8] + ":" + str(info1[0][1]) + "-" + str(info1[0][2])
+        # link same json as in tree/list nodes
+        jsonret['Location_link'] = {'label': organism_label,
+                                    'scaffold': info1[0][8],
+                                    'organism': taxon_id,
+                                    'version': ver,
+                                    'star': "*", #not impotant here
+                                    'startbase': start_range,
+                                    'stopbase': stop_range
+                                    }
+        # if($info1[0][5] ==0)
+        #       $orientation="(+)";
+        #else
+        #       $orientation="(-)";
+        if info1[0][5] == 0:
+            jsonret['Orientation'] = "(+)"
+        else:
+            jsonret['Orientation'] = "(-)"
+
+        #my $no_of_exon=$#info2+1;
+        jsonret['ExonsNum'] = len(info2) + 1
+
+        # <div class="id_name"> Description : </div>
+        # <div class="content">$info1[0][7] </div>
+        jsonret['Description'] = info1[0][7]
+        
+        jsonret['Comments'] = []
+        if len(info15) >= 0:
+            jsonret['Comments'].append("This protein is a Signal Peptide")
+        else:
+            jsonret['Comments'].append("This protein is Not Signal Peptide")
+
+        if len(info16) >= 0:
+            jsonret['Comments'].append("This protein has transmembrane domain")
+        else:
+            jsonret['Comments'].append("This protein does Not have transmembrane domain")
+
+        if info1[0][11] == 3:
+            jsonret['Comments'].append("Not Reviewed")
+        else:
+            email_ref =  "<a href='mailto:" + info1[0][13] + "'>" + info1[0][12] + "</a>"
+            jsonret['Comments'].append("Reviewed by " + email_ref + "</div>")
+
+        jsonret['NCBIlink'] = "http://www.ncbi.nlm.nih.GOv/blast/Blast.cgi?" + \
+                      "QUERY="+info1[0][6]+"&" + \
+                      "DATABASE=nr&HITLIST_SIZE=10&FILTER=L&EXPECT=10&FORMAT_TYPE=HTML&PROGRAM=blastn&" + \
+                      "CLIENT=web&SERVICE=plain&NCBI_GI=on&PAGE=Nucleotides&AUTO_FORMAT=Fullauto&" + \
+                      "SHOW_OVERVIEW=yes&CMD=Put"
+
+
+        # TODO
+        # Call log likelihood and fickett executeables here
+        # Creates output files log_out_filename and sequence_out_filename, respectively
+        log_out_filename = "/tmp/images/bd_log_output_file_" + str(ID)
+        sequence_out_filename = "/tmp/images/bd_fickett_output_file_" + str(ID)
+        # my $sequence_len = length($info1[0][6]);
+        sequence_len = len(info1[0][6])
+
+        #graphs - TODO
+        # plot_gene(\@info2,"/tmp/images/$id.png",$log_output_file,$fickett_output_file,$sequence_len)
+        jsonret['scaffold_pos'] = function._plot_gene(info2)
+        jsonret['Flickett_res'] = function._get_loglikehood_data(sequence_out_filename)  # array of arrays [timestamp, series1, series2]
+        jsonret['LogLkhd_res']  = function._get_fickett_data(log_out_filename)    # array of arrays [timestamp, series1, series2, ...]
+        #functional annotation - TODO
+        jsonret['GO'] = {} #json reslt
+        jsonret['ProfileScan'] = {} #json result
+        jsonret['HmmSmart'] = {} #json result
+        jsonret['InterPro'] = {} #json result
+        jsonret['FprintScan'] = {} #json result
+
+    #elif jsondata['link'] == 'promo': - TODO
+    #elif jsondata['link'] == 'estlink': - TODO
+    #elif jsondata['link'] == 'syntenylink': - TODO
+    #elif jsondata['link'] == 'gfflink': - TODO
+
+    print("sequenceDetailUI returns:")
+    print(jsonret)
+    return JsonResponse(jsonret)
+
+
