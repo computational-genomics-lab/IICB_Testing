@@ -7,7 +7,7 @@ sudo apt-get update
 sudo apt install nodejs
 sudo apt install npm
 sudo apt-get install build-essential libssl-dev libffi-dev python-dev
-pip3 install virtualenv
+sudo pip3 install virtualenv
 
 CONFIG_FILE='configuration.ini'
 

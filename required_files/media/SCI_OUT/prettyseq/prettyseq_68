@@ -1,0 +1,54 @@
+PRETTYSEQ of  from 1 to 756
+
+           ---------|---------|---------|---------|---------|---------|
+         1 atgtctgaagagctgaaagcgcttgaggagaacggggtatggacgatcgttacgccaccc 60
+         1 M  S  E  E  L  K  A  L  E  E  N  G  V  W  T  I  V  T  P  P   20
+
+           ---------|---------|---------|---------|---------|---------|
+        61 gaaaatagtcacgtgctgcacacaatatgggtctctaagactaaaagtgatgccgacggg 120
+        21 E  N  S  H  V  L  H  T  I  W  V  S  K  T  K  S  D  A  D  G   40
+
+           ---------|---------|---------|---------|---------|---------|
+       121 ggtattgaaagatttaaggcgagattggttgcctgtggcaacgagaaattgtttggagtg 180
+        41 G  I  E  R  F  K  A  R  L  V  A  C  G  N  E  K  L  F  G  V   60
+
+           ---------|---------|---------|---------|---------|---------|
+       181 gactatggccttacgtttgcttctttaatggatctgagcacggtgaaggtgatactagtg 240
+        61 D  Y  G  L  T  F  A  S  L  M  D  L  S  T  V  K  V  I  L  V   80
+
+           ---------|---------|---------|---------|---------|---------|
+       241 ctcgctatgcgttggggagtgcctgcgaggcacggggacattcccaatgcttacgtaaag 300
+        81 L  A  M  R  W  G  V  P  A  R  H  G  D  I  P  N  A  Y  V  K   100
+
+           ---------|---------|---------|---------|---------|---------|
+       301 gtagacaaagaagaacacctggaaatttacttggcaattccacagggcatggacattcca 360
+       101 V  D  K  E  E  H  L  E  I  Y  L  A  I  P  Q  G  M  D  I  P   120
+
+           ---------|---------|---------|---------|---------|---------|
+       361 gtaaatgccttaaaagagttcggcgtaaatgacaagtccaaattagcgctgcgcttaaag 420
+       121 V  N  A  L  K  E  F  G  V  N  D  K  S  K  L  A  L  R  L  K   140
+
+           ---------|---------|---------|---------|---------|---------|
+       421 aaatcgctttacgggttgaagcaagcgggacgcttgtggagtcagctgcttcatgcaaaa 480
+       141 K  S  L  Y  G  L  K  Q  A  G  R  L  W  S  Q  L  L  H  A  K   160
+
+           ---------|---------|---------|---------|---------|---------|
+       481 ttagaagaagcaggctttacacgatgtggaactgatatgtgcctgttctttctgcgccag 540
+       161 L  E  E  A  G  F  T  R  C  G  T  D  M  C  L  F  F  L  R  Q   180
+
+           ---------|---------|---------|---------|---------|---------|
+       541 aacggcgatgtgactgttgcgggcgtttacgtggatgacctattggtgacggcttctaac 600
+       181 N  G  D  V  T  V  A  G  V  Y  V  D  D  L  L  V  T  A  S  N   200
+
+           ---------|---------|---------|---------|---------|---------|
+       601 ccagagatgatggaagcattttgcaagtcgatgaatattctttctgtcaaggaattggga 660
+       201 P  E  M  M  E  A  F  C  K  S  M  N  I  L  S  V  K  E  L  G   220
+
+           ---------|---------|---------|---------|---------|---------|
+       661 gaggtgcggaactttcttgggatgagggtgattctggataatgcagaaaattatacgctg 720
+       221 E  V  R  N  F  L  G  M  R  V  I  L  D  N  A  E  N  Y  T  L   240
+
+           ---------|---------|---------|------
+       721 gatcaaccagcagcaattgaggagatgattacgtaa 756
+       241 D  Q  P  A  A  I  E  E  M  I  T  *   251
+

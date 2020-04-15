@@ -51,8 +51,8 @@
         }
     },
     "media": {
-        "aboutUs": "http://127.0.0.1:8079/media/ABOUT_US/",
-        "browserDetailsMediaUrl": "http://127.0.0.1:8079/media/SCI_OUT/",
-        "dndMediaUrl": "http://127.0.0.1:8079/media/dnd/"
+        "aboutUs": "http://10.0.0.234:8079/media/ABOUT_US/",
+        "browserDetailsMediaUrl": "http://10.0.0.234:8079/media/SCI_OUT/",
+        "dndMediaUrl": "http://10.0.0.234:8079/media/dnd/"
     }
 }
